@@ -1,0 +1,1058 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workforce Planning Prototype - Mantis Style</title>
+    <!-- Tailwind CSS for rapid styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Public Sans font (Mantis/MUI default) -->
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Public Sans', sans-serif;
+            background-color: #e2e8f0; /* Darker background to highlight the 1400x900 frame */
+            color: #262626;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        /* The Main App Frame */
+        .app-frame {
+            max-width: 1400px;
+            max-height: 900px;
+            width: 100%;
+            height: 100%;
+            background-color: #f4f7fe;
+            border: 2px solid black;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            overflow: hidden;
+            position: relative;
+            border-radius: 4px;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #bfbfbf; }
+
+        .mantis-card {
+            background: #ffffff;
+            border: 1px solid #f0f0f0;
+            border-radius: 8px;
+            box-shadow: 0px 1px 4px rgba(0, 0, 0, 0.05);
+        }
+
+        /* Availability Hatching */
+        .availability-hatch {
+            background-image: repeating-linear-gradient(
+                45deg,
+                rgba(240, 240, 240, 0.4),
+                rgba(240, 240, 240, 0.4) 10px,
+                rgba(255, 255, 255, 0.4) 10px,
+                rgba(255, 255, 255, 0.4) 20px
+            );
+            border-bottom: 1px dashed rgba(229, 231, 235, 0.3);
+            position: absolute;
+            width: 100%;
+            z-index: 5;
+        }
+
+        /* Available Slots */
+        .available-slot {
+            position: absolute;
+            width: 100%;
+            z-index: 5;
+            background: white;
+            transition: background-color 0.2s;
+            border-bottom: 1px dashed #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+        }
+
+        .demand-indicator {
+            font-size: 10px;
+            font-weight: 600;
+            color: #8c8c8c;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .available-slot:hover:not([style*="cursor: not-allowed"]) {
+            background-color: rgba(24, 144, 255, 0.05);
+        }
+
+        /* Task Blocks */
+        .task-block {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            border-left: 3px solid #1890ff;
+            background: #e6f7ff;
+            color: #0050b3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            z-index: 20;
+            line-height: 1.2;
+            transition: box-shadow 0.2s;
+            cursor: pointer;
+        }
+        .task-block:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            z-index: 25;
+            transform: translateY(-1px);
+        }
+
+        /* Visual Style for a slot offered for swap */
+        .task-block.is-offered {
+            border: 2px dashed #faad14; /* Amber dashed border */
+            border-left-width: 3px;
+            box-shadow: none;
+            opacity: 0.85;
+        }
+
+        /* Swap Offer Block (from others) */
+        .swap-offer-block {
+            position: absolute;
+            left: 6px;
+            right: 6px;
+            border: 2px dashed #faad14;
+            background: #fffbe6;
+            color: #d48806;
+            border-radius: 6px;
+            padding: 4px 8px;
+            font-size: 10px;
+            font-weight: 700;
+            z-index: 15;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .swap-offer-block:hover {
+            background: #fff1b8;
+            transform: scale(1.02);
+            box-shadow: 0 4px 12px rgba(250, 173, 20, 0.2);
+            z-index: 30;
+        }
+        .swap-offer-block .accept-label {
+            font-size: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+            color: #faad14;
+        }
+
+        /* Drag Moving State */
+        .task-block.is-moving {
+            opacity: 0.8;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            z-index: 100;
+            pointer-events: none;
+            transform: scale(1.02);
+            cursor: grabbing;
+        }
+
+        /* Preview Block for Drag-to-Create */
+        .drag-preview {
+            position: absolute;
+            left: 4px;
+            right: 4px;
+            background: rgba(24, 144, 255, 0.15);
+            border: 2px dashed #1890ff;
+            border-radius: 4px;
+            z-index: 30;
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1890ff;
+            font-size: 10px;
+            font-weight: bold;
+        }
+
+        /* Modal Backdrop */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background-color: rgba(0, 0, 0, 0.4);
+            backdrop-filter: blur(4px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-active { display: flex !important; }
+
+        /* Side Menu Select Styling */
+        .side-menu-select {
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%238c8c8c' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+            background-position: right 0.5rem center;
+            background-repeat: no-repeat;
+            background-size: 1.5em 1.5em;
+            padding-right: 2.5rem;
+        }
+
+        .floating-bar {
+            position: absolute;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            z-index: 500;
+        }
+        .pill-container {
+            background: white;
+            height: 72px;
+            padding: 0 32px;
+            border-radius: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            border: 1px solid #f0f0f0;
+        }
+        .circular-progress {
+            position: relative;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: conic-gradient(#1890ff var(--progress), #f0f0f0 0deg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .circular-progress::before {
+            content: "";
+            position: absolute;
+            width: 36px;
+            height: 36px;
+            background: white;
+            border-radius: 50%;
+        }
+        .circular-progress span {
+            position: relative;
+            font-size: 11px;
+            font-weight: 700;
+            color: #595959;
+        }
+        .submit-btn {
+            background: #722ed1;
+            color: white;
+            height: 72px;
+            padding: 0 32px;
+            border-radius: 40px;
+            font-weight: 700;
+            font-size: 14px;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 20px rgba(114, 46, 209, 0.3);
+            transition: all 0.2s;
+        }
+        
+        .submit-btn:disabled {
+            background: #d9d9d9;
+            color: #8c8c8c;
+            box-shadow: none;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+        
+        .scope-block {
+            transition: all 0.3s;
+            border: 2px solid #f0f0f0;
+        }
+        .scope-block.active {
+            background-color: #ffffff;
+            border-color: #722ed1;
+            box-shadow: 0 4px 12px rgba(114, 46, 209, 0.08);
+        }
+
+        /* Toggle & Segmented Controls Fixes */
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #d9d9d9; transition: .4s; border-radius: 20px; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #1890ff; }
+        input:checked + .slider:before { transform: translateX(14px); }
+
+        .segmented-control { display: flex; background: #f5f5f5; padding: 2px; border-radius: 6px; border: 1px solid #d9d9d9; }
+        .segment-btn { padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 4px; transition: all 0.2s; color: #8c8c8c; }
+        .segment-btn.active { background: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); color: #1890ff; }
+
+        .time-row { 
+            height: 20px; 
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 700;
+            color: #bfbfbf;
+            border-bottom: 1px solid transparent;
+        }
+        .time-row.hour-mark {
+            color: #8c8c8c;
+            border-bottom: 1px solid #f0f0f0;
+            height: 40px; 
+            align-items: flex-start;
+            padding-top: 4px;
+        }
+
+        .ai-primary-cta {
+            background: linear-gradient(135deg, #722ed1 0%, #531dab 100%);
+            color: white;
+            width: 100%;
+            padding: 18px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            box-shadow: 0 8px 24px rgba(114, 46, 209, 0.25);
+            transition: all 0.2s;
+        }
+        .ai-primary-cta:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(114, 46, 209, 0.35);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-frame">
+        <!-- LEFT SIDE MENU -->
+        <aside class="w-[20%] bg-white border-r border-gray-200 flex flex-col h-full z-20">
+            <div class="p-6 border-b border-gray-100">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">67</div>
+                    <span class="font-bold text-lg tracking-tight text-[#141414]">IntraDay PRO</span>
+                </div>
+            </div>
+            
+            <div class="flex-1 py-4 overflow-y-auto">
+                <div class="px-6 py-4 border-t border-gray-100">
+                    <div class="mb-2 text-[10px] uppercase font-bold text-gray-400 tracking-wider">Demand View</div>
+                    <div class="space-y-1">
+                        <label for="demandTaskSelector" class="text-[11px] text-gray-500 font-medium">Viewing demands for:</label>
+                        <div class="relative">
+                            <select id="demandTaskSelector" onchange="handleDemandTaskChange()" class="w-full appearance-none side-menu-select px-3 py-2 bg-gray-50 border border-gray-200 rounded-md text-sm font-bold text-gray-700 outline-none cursor-pointer">
+                                <option value="Till Shift">Till Shift</option>
+                                <option value="Floor Support" selected>Floor Support</option>
+                                <option value="Stock Management">Stock Management</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- MAIN SECTION -->
+        <section class="flex-1 flex flex-col h-full overflow-hidden relative">
+            <header class="h-16 w-full bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-30">
+                <div class="flex items-center gap-4">
+                    <button onclick="openModal('aiModal')" class="group flex items-center gap-2 px-4 py-2 border border-purple-200 bg-purple-50 text-purple-700 text-[11px] font-bold rounded-md hover:bg-purple-100 transition-all uppercase tracking-wide">
+                        <span>✨</span> AI Plano-kadabra
+                    </button>
+                </div>
+                <div class="flex items-center border border-gray-200 rounded-md bg-white shadow-sm overflow-hidden">
+                    <button onclick="changeWeek(-1)" class="p-2 hover:bg-gray-50 text-gray-400 border-r border-gray-100">←</button>
+                    <div id="weekLabel" class="px-8 py-1.5 text-sm font-bold text-gray-700 min-w-[140px] text-center select-none">Week 20, 2026</div>
+                    <button onclick="changeWeek(1)" class="p-2 hover:bg-gray-50 text-gray-400 border-l border-gray-100">→</button>
+                </div>
+                <div class="flex items-center gap-8">
+                    <div class="flex items-center gap-3">
+                        <span class="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Vertical Layout</span>
+                        <label class="switch">
+                            <input type="checkbox" checked onchange="handleLayoutToggle(this.checked)">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="segmented-control">
+                        <button onclick="handleViewSwitch(this, 'D')" class="segment-btn">D</button>
+                        <button onclick="handleViewSwitch(this, 'W')" class="segment-btn active">W</button>
+                        <button onclick="handleViewSwitch(this, 'M')" class="segment-btn">M</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="flex flex-1 overflow-hidden relative">
+                <main class="w-[62.5%] flex flex-col h-full bg-white overflow-hidden border-r border-gray-200 relative">
+                    <div id="headerGrid" class="grid grid-cols-8 border-b border-gray-200 bg-gray-50/50">
+                        <div class="h-12 border-r border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto relative bg-white" id="gridContainer">
+                        <div class="grid grid-cols-8 min-h-full" id="calendarGrid">
+                            <div class="bg-gray-50 border-r border-gray-200 h-full overflow-hidden" id="timeColumn">
+                                <script>for(let i=8; i<20; i++) { document.write(`<div class="time-row hour-mark">${i}:00</div>`); }</script>
+                            </div>
+                            <div id="dayColumnsContainer" class="contents"></div>
+                        </div>
+                    </div>
+
+                    <div class="floating-bar">
+                        <div class="pill-container">
+                            <div class="flex items-center gap-4 border-r pr-6">
+                                <div id="unpublishedCircle" class="circular-progress" style="--progress: 0deg">
+                                    <span id="unpublishedPercent">0.0h</span>
+                                </div>
+                                <div class="flex flex-col">
+                                    <span id="unpublishedLabel" class="text-sm font-bold text-gray-700 leading-none">0 slots added</span>
+                                    <span class="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Summary</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-8 px-4">
+                                <button onclick="openModal('prefsModal')" class="text-gray-400 hover:text-gray-800 transition transform hover:scale-110" title="Preferences">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94.826 3.31 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                </button>
+                                <button onclick="openModal('copyModal')" class="text-gray-400 hover:text-gray-800 transition transform hover:scale-110" title="Copy Plan">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <button onclick="submitChanges()" class="submit-btn" id="mainSubmitBtn"><span>SUBMIT</span>✓</button>
+                    </div>
+                </main>
+
+                <!-- SIDEBAR -->
+                <aside class="w-[37.5%] bg-white flex flex-col h-full overflow-hidden text-[#141414]">
+                    <div class="p-6 space-y-6 overflow-y-auto">
+                        <div class="mantis-card p-5">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">Account Values</h3>
+                            <div class="space-y-4">
+                                <div class="space-y-2">
+                                    <div class="flex items-end justify-between"><p class="text-[11px] font-medium text-gray-500">Working / Target</p><p class="text-sm font-bold text-gray-800"><span id="totalHoursLabel">0</span> / <span id="targetLabel">40</span>h</p></div>
+                                    <div class="w-full bg-gray-100 rounded-full h-2 border border-gray-50 flex overflow-hidden">
+                                        <div id="targetBar" class="bg-blue-500 h-full transition-all duration-500" style="width: 0%"></div>
+                                        <div id="overtimeBar" class="bg-amber-500 h-full transition-all duration-500" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mantis-card p-5">
+                            <h3 class="text-xs font-bold mb-4 text-gray-500 uppercase tracking-widest">Rules</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-center gap-3">
+                                    <input type="checkbox" checked disabled class="w-3.5 h-3.5 rounded text-blue-500 accent-blue-600 cursor-default opacity-80">
+                                    <span class="text-xs text-gray-600 font-medium tracking-tight">Compliance</span>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <input type="checkbox" id="syncCheck" disabled class="w-3.5 h-3.5 rounded text-gray-300 accent-green-600 cursor-default opacity-80">
+                                    <span id="syncText" class="text-xs text-gray-600 font-medium tracking-tight">Staff Sync</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mantis-card p-5">
+                            <h3 class="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-4">Quick Navigation</h3>
+                            <div id="miniCalendarGrid" class="grid grid-cols-7 gap-1"></div>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </section>
+    </div>
+
+    <!-- MODALS OUTSIDE FOR TOP-LEVEL VIEWING -->
+    <div id="feedbackMsg" class="fixed top-6 left-1/2 -translate-x-1/2 z-[2000] bg-[#722ed1] text-white px-8 py-3.5 rounded-full shadow-2xl font-bold text-sm transform -translate-y-20 transition-all duration-500 ease-out pointer-events-none flex items-center gap-3">
+        <span class="text-xl">✓</span>
+        <span id="feedbackText">Plan copied successfully!</span>
+    </div>
+
+    <div id="conflictModal" class="modal-overlay" style="z-index: 3000;">
+        <div class="bg-white w-[420px] rounded-3xl shadow-2xl p-8 border border-gray-100 text-center">
+            <div class="w-16 h-16 mx-auto mb-4 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center text-3xl">⚠️</div>
+            <h2 class="text-xl font-bold text-gray-800 mb-2">Manual Slots Detected</h2>
+            <p class="text-sm text-gray-500 mb-8 leading-relaxed px-4">
+                The target range already contains slots you created. How should the new plan be applied?
+            </p>
+            <div class="space-y-3">
+                <button onclick="resolveConflict('overwrite')" class="w-full py-3.5 bg-red-500 text-white font-bold rounded-2xl shadow-lg hover:bg-red-600 transition">Overwrite All Existing</button>
+                <button onclick="resolveConflict('keep')" class="w-full py-3.5 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition">Keep & Merge</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="copyModal" class="modal-overlay">
+        <div class="bg-white w-[480px] rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
+            <div class="p-6 bg-purple-50 border-b border-purple-100 text-center">
+                <h2 class="text-xl font-bold text-purple-900 tracking-tight">Copy Plan</h2>
+                <p class="text-xs text-purple-600 font-medium uppercase tracking-widest">Duplicate existing schedule data</p>
+            </div>
+            <div class="p-8 space-y-8 bg-white">
+                <div class="space-y-4">
+                    <h4 class="text-[10px] font-bold text-purple-400 uppercase tracking-[0.2em]">1. Select Source</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Scope Type</label>
+                            <select id="copySourceType" onchange="updateCopyUI()" class="w-full text-sm border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:border-purple-500 cursor-pointer bg-gray-50/50">
+                                <option value="day">Selected Day</option>
+                                <option value="week">Whole Week</option>
+                            </select>
+                        </div>
+                        <div id="sourceDayWrapper">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Source Day</label>
+                            <select id="copySourceDay" onchange="updateCopyUI()" class="w-full text-sm border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:border-purple-500 cursor-pointer">
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="space-y-4 pt-4 border-t border-gray-50">
+                    <h4 class="text-[10px] font-bold text-purple-400 uppercase tracking-[0.2em]">2. Select Destination</h4>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Target Week</label>
+                            <select id="copyTargetWeek" onchange="updateCopyUI()" class="w-full text-sm border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:border-purple-500 cursor-pointer">
+                            </select>
+                        </div>
+                        <div id="targetDayWrapper">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-2">Target Day</label>
+                            <select id="copyTargetDay" class="w-full text-sm border border-gray-200 rounded-xl py-2.5 px-3 outline-none focus:border-purple-500 cursor-pointer">
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="pt-6 flex flex-col items-center gap-4">
+                    <button onclick="handleExecuteCopy()" class="w-full py-4 bg-purple-600 text-white font-bold rounded-2xl shadow-xl shadow-purple-100 hover:bg-purple-700 transition transform hover:-translate-y-0.5 active:translate-y-0">Copy and Apply Plan</button>
+                    <button onclick="closeModal('copyModal')" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">Discard and Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="swapConfirmModal" class="modal-overlay">
+        <div class="bg-white w-[420px] rounded-3xl shadow-2xl p-8 border border-gray-100 text-center">
+            <div class="w-24 h-24 mx-auto mb-4 rounded-full border-4 border-amber-50 p-1 bg-white shadow-inner overflow-hidden">
+                <img id="swapRequesterAvatar" src="" class="w-full h-full rounded-full object-cover">
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">Accept Swap Offer?</h2>
+            <p class="text-sm text-gray-500 mb-8 leading-relaxed px-4">
+                <span id="swapRequesterName" class="font-bold text-gray-700"></span> is requesting a swap for their <span id="swapShiftName" class="font-bold text-amber-600"></span> shift on this day. 
+            </p>
+            <div class="space-y-3">
+                <button id="confirmSwapBtn" class="w-full py-4 bg-amber-500 text-white font-bold rounded-2xl shadow-xl shadow-amber-100 hover:bg-amber-600 transition transform hover:-translate-y-0.5 active:translate-y-0">Confirm and Accept</button>
+                <button onclick="closeModal('swapConfirmModal')" class="text-sm font-bold text-gray-400 hover:text-gray-600 py-2">No, ignore offer</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="taskModal" class="modal-overlay">
+        <div class="bg-white w-[420px] rounded-3xl shadow-2xl p-8 border border-gray-100">
+            <div class="flex items-center justify-between mb-8">
+                <h2 id="taskModalTitle" class="text-2xl font-bold text-gray-800">Edit Slot</h2>
+                <button id="removeTaskBtn" onclick="handleRemoveTask()" class="text-xs font-bold text-red-500 hover:text-red-700 transition px-3 py-1 bg-red-50 rounded-full">Delete Slot</button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Time Range</label>
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1"><select id="startTime" class="w-full appearance-none px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none cursor-pointer"></select></div>
+                        <span class="text-gray-400 font-bold">-</span>
+                        <div class="flex-1"><select id="endTime" class="w-full appearance-none px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none cursor-pointer"></select></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-400 uppercase tracking-widest block mb-3">Task Type</label>
+                    <div class="relative">
+                        <select id="taskSelect" class="w-full appearance-none px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold focus:border-blue-500 outline-none cursor-pointer">
+                            <option value="Till Shift">Till Shift</option>
+                            <option value="Floor Support">Floor Support</option>
+                            <option value="Stock Management">Stock Management</option>
+                            <option value="Break">Break</option>
+                            <option value="Staff Sync">Staff Sync</option>
+                        </select>
+                        <span class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-40">▼</span>
+                    </div>
+                </div>
+                <div class="pt-4 border-t border-gray-100">
+                    <button id="offerSwapBtn" onclick="handleOfferSwap()" class="w-full py-4 border-2 border-dashed border-amber-200 text-amber-600 font-bold rounded-2xl hover:bg-amber-50 transition flex items-center justify-center gap-2">
+                        <span>🔄</span> OFFER FOR SWAP
+                    </button>
+                </div>
+            </div>
+            <div class="mt-10 flex items-center justify-end gap-6">
+                <button onclick="closeModal('taskModal')" class="text-sm font-bold text-gray-400 hover:text-gray-700 transition">Cancel</button>
+                <button onclick="handleSaveTask()" class="px-10 py-3 bg-blue-600 text-white text-sm font-bold rounded-2xl shadow-lg hover:bg-blue-700 transition transform hover:-translate-y-0.5 active:translate-y-0">Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="aiModal" class="modal-overlay">
+        <div class="bg-white w-[540px] rounded-2xl shadow-2xl overflow-hidden border border-gray-100">
+            <div class="p-8 bg-white border-b border-gray-50">
+                <div class="flex items-center gap-4 mb-4">
+                    <div class="w-12 h-12 bg-[#722ed1] rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-200 flex-shrink-0">✨</div>
+                    <h2 class="text-[28px] font-bold text-[#262626] tracking-tight">AI Planning Assistant</h2>
+                </div>
+                <p class="text-sm text-gray-500 leading-relaxed font-medium">The AI will optimize your schedule by filling staffing gaps and intelligently placing breaks.</p>
+            </div>
+            <div class="p-8 space-y-8 bg-white">
+                <h4 class="text-[11px] font-bold text-[#8c8c8c] uppercase tracking-[0.15em] mb-6">Set Target Scope</h4>
+                <div class="grid grid-cols-3 gap-3">
+                    <div id="dayScopeBlock" class="scope-block p-4 rounded-xl active border-2">
+                        <label class="flex items-center gap-2.5 cursor-pointer mb-3">
+                            <input type="radio" name="aiScope" value="day" checked onchange="updateAIScopeDisplay()" class="w-4 h-4 accent-[#722ed1]">
+                            <span class="text-[11px] font-bold text-gray-700 uppercase tracking-tighter">Selected Day</span>
+                        </label>
+                        <select id="aiDaySelect" onchange="updateAIScopeDisplay()" class="w-full text-sm border border-gray-200 rounded-lg py-2 px-2 bg-white outline-none focus:border-[#722ed1] transition-colors cursor-pointer">
+                            <option value="0">Monday</option><option value="1">Tuesday</option><option value="2">Wednesday</option><option value="3">Thursday</option><option value="4">Friday</option>
+                        </select>
+                    </div>
+                    <div id="weekScopeBlock" class="scope-block p-4 rounded-xl border-2">
+                        <label class="flex items-center gap-2.5 cursor-pointer mb-3">
+                            <input type="radio" name="aiScope" value="week" onchange="updateAIScopeDisplay()" class="w-4 h-4 accent-[#722ed1]">
+                            <span class="text-[11px] font-bold text-gray-700 uppercase tracking-tighter">Whole Week</span>
+                        </label>
+                        <select id="aiWeekSelect" onchange="updateAIScopeDisplay()" class="w-full text-sm border border-gray-200 rounded-lg py-2 px-2 bg-white outline-none focus:border-[#722ed1] transition-colors cursor-pointer">
+                            <option value="0">Week 20</option><option value="1">Week 21</option><option value="2">Week 22</option><option value="3">Week 23</option>
+                        </select>
+                    </div>
+                    <div id="periodScopeBlock" class="scope-block p-4 rounded-xl border-2">
+                        <label class="flex items-center gap-2.5 cursor-pointer mb-3">
+                            <input type="radio" name="aiScope" value="period" onchange="updateAIScopeDisplay()" class="w-4 h-4 accent-[#722ed1]">
+                            <span class="text-[11px] font-bold text-gray-700 uppercase tracking-tighter">Period</span>
+                        </label>
+                        <div class="flex items-center gap-2">
+                            <input type="text" id="aiPeriodStart" placeholder="Start" oninput="updateAIScopeDisplay()" class="w-full text-xs border border-gray-200 rounded-lg py-2 text-center outline-none focus:border-[#722ed1]">
+                            <input type="text" id="aiPeriodEnd" placeholder="End" oninput="updateAIScopeDisplay()" class="w-full text-xs border border-gray-200 rounded-lg py-2 text-center outline-none focus:border-[#722ed1]">
+                        </div>
+                    </div>
+                </div>
+                <div class="p-6 bg-[#f9f9fb] rounded-2xl border border-gray-100 flex gap-4">
+                    <div class="text-2xl pt-1">🤖</div>
+                    <div>
+                        <h5 class="text-sm font-bold text-[#262626] mb-1">Intelligence Summary</h5>
+                        <p id="aiSummaryText" class="text-[13px] text-gray-500 leading-relaxed"></p>
+                    </div>
+                </div>
+                <div class="space-y-6 pt-2">
+                    <button onclick="handleExecuteAI()" class="ai-primary-cta group h-16 rounded-2xl shadow-xl shadow-purple-100">
+                        <span class="text-base uppercase">Generate Plan (Slots & Breaks)</span>
+                        <svg class="w-5 h-5 ml-2 transition-transform group-hover:scale-125" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    </button>
+                    <div class="flex justify-center"><button onclick="closeModal('aiModal')" class="text-sm font-bold text-gray-400 hover:text-gray-600 transition">Cancel and go back</button></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const START_HOUR = 8, END_HOUR = 20, SLOT_HEIGHT = 20;
+        let currentWeekOffset = 0, currentActiveDay = null, currentActiveTaskId = null, unpublishedCount = 0, targetAllocationBase = 40;
+        const initialMonday = new Date(2026, 4, 11);
+        
+        let tasks = [
+            { id: 1, weekOffset: 0, day: 0, start: "08:00", end: "10:30", title: "Till Shift", color: "green", offered: false },
+            { id: 2, weekOffset: 0, day: 2, start: "10:00", end: "13:00", title: "Floor Support", color: "blue", offered: false },
+        ];
+
+        let swapOffers = [
+            { id: 's1', day: 1, start: "09:00", end: "12:00", title: "Stock Management", user: "Sarah Miller", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah" },
+            { id: 's2', day: 4, start: "14:00", end: "17:30", title: "Till Shift", user: "James Wilson", avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=James" }
+        ];
+
+        const demandsData = {
+            'Till Shift': [-1, -1, -2, -2, -1, 0, -1, -2, -2, -3, -3, -2, -2, -1, 0, -1, -2, -2, -1, -1, -1, 0, -1, -1],
+            'Floor Support': [-1, -2, -3, -2, -2, -1, -1, -1, -2, -1, -2, -3, -2, -1, 0, -1, -1, -2, -2, -1, -1, 0, -1, -1],
+            'Stock Management': [0, -1, -1, -2, -3, -3, -2, -1, 0, 0, -1, -1, -2, -2, -1, -1, -1, 0, 0, -1, -1, -2, -2, -1]
+        };
+        let selectedDemandTask = 'Floor Support';
+
+        let isDraggingNew = false, isMovingTask = false, isMovingTaskActive = false, dragActiveBlock = null;
+        let dragStartSlot = null, dragEndSlot = null, dragDay = null;
+        let movingTaskData = null, movingInitialY = 0, movingInitialTop = 0;
+        let pendingOperation = null;
+
+        function formatHour(h) { return Math.floor(h).toString().padStart(2, '0') + (h % 1 === 0 ? ':00' : ':30'); }
+        function parseTimeToMinutes(timeStr) { const [h, m] = timeStr.split(':').map(Number); return h * 60 + m; }
+        function isTimeAvailable(dayIdx, hour) { if (dayIdx === 0 || dayIdx === 2) return hour < 17; if (dayIdx === 1 || dayIdx === 3) return hour >= 11; if (dayIdx === 4) return true; return false; }
+        
+        function handleLayoutToggle(v) { console.log("Vertical Layout:", v); }
+        function handleViewSwitch(btn, v) { btn.closest('.segmented-control').querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active')); btn.classList.add('active'); }
+        function handleDemandTaskChange() { selectedDemandTask = document.getElementById('demandTaskSelector').value; renderCalendar(); }
+        
+        function showFeedback(msg) {
+            const el = document.getElementById('feedbackMsg');
+            document.getElementById('feedbackText').innerText = msg;
+            el.classList.remove('-translate-y-20'); el.classList.add('translate-y-0');
+            setTimeout(() => { el.classList.remove('translate-y-0'); el.classList.add('-translate-y-20'); }, 3000);
+        }
+
+        function checkConflict(targetWeek, days) { return tasks.some(t => t.weekOffset === targetWeek && days.includes(t.day)); }
+
+        function resolveConflict(choice) {
+            closeModal('conflictModal');
+            if (pendingOperation) {
+                if (choice === 'overwrite') {
+                    const targetW = pendingOperation.targetWeek, days = pendingOperation.targetDays;
+                    tasks = tasks.filter(t => !(t.weekOffset === targetW && days.includes(t.day)));
+                }
+                pendingOperation.execute(); pendingOperation = null;
+            }
+        }
+
+        function updateCopyUI() {
+            const typeSelect = document.getElementById('copySourceType'); if (!typeSelect) return;
+            const type = typeSelect.value, sourceDaySelect = document.getElementById('copySourceDay');
+            const targetDaySelect = document.getElementById('copyTargetDay'), targetWeekSelect = document.getElementById('copyTargetWeek');
+            document.getElementById('sourceDayWrapper').style.display = type === 'day' ? 'block' : 'none';
+            document.getElementById('targetDayWrapper').style.display = type === 'day' ? 'block' : 'none';
+            if (targetWeekSelect.options.length === 0) {
+                targetWeekSelect.innerHTML = '';
+                for(let w=0; w<=3; w++) {
+                    const wS = new Date(initialMonday); wS.setDate(wS.getDate() + (w * 7));
+                    const wE = new Date(initialMonday); wE.setDate(wE.getDate() + (w * 7) + 4);
+                    const opt = document.createElement('option'); opt.value = w;
+                    opt.innerText = `Week ${20+w} (${wS.getDate()}.${wS.getMonth()+1} - ${wE.getDate()}.${wE.getMonth()+1})`;
+                    if (w === currentWeekOffset) opt.selected = true;
+                    targetWeekSelect.appendChild(opt);
+                }
+            }
+            const dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'], targetWeekOffset = parseInt(targetWeekSelect.value);
+            const currentSDayIdx = parseInt(sourceDaySelect.value) || 0;
+            sourceDaySelect.innerHTML = ''; targetDaySelect.innerHTML = '';
+            dayLabels.forEach((label, idx) => {
+                const sD = new Date(initialMonday); sD.setDate(sD.getDate() + (currentWeekOffset * 7) + idx);
+                const sOpt = document.createElement('option'); sOpt.value = idx; sOpt.innerText = `${label} ${sD.getDate()}.${sD.getMonth() + 1}`;
+                if (idx === currentSDayIdx) sOpt.selected = true;
+                sourceDaySelect.appendChild(sOpt);
+                const tD = new Date(initialMonday); tD.setDate(tD.getDate() + (targetWeekOffset * 7) + idx);
+                const tOpt = document.createElement('option'); tOpt.value = idx; tOpt.innerText = `${label} ${tD.getDate()}.${tD.getMonth() + 1}`;
+                targetDaySelect.appendChild(tOpt);
+            });
+            const sActive = new Date(initialMonday); sActive.setDate(sActive.getDate() + (currentWeekOffset * 7) + currentSDayIdx);
+            typeSelect.options[0].innerText = `Selected Day (${sActive.getDate()}.${sActive.getMonth() + 1})`;
+            const rangeS = new Date(initialMonday); rangeS.setDate(rangeS.getDate() + (currentWeekOffset * 7));
+            const rangeE = new Date(initialMonday); rangeE.setDate(rangeE.getDate() + (currentWeekOffset * 7) + 4);
+            typeSelect.options[1].innerText = `Whole Week (${rangeS.getDate()}.${rangeS.getMonth() + 1} - ${rangeE.getDate()}.${rangeE.getMonth() + 1})`;
+        }
+
+        function handleExecuteCopy() {
+            const type = document.getElementById('copySourceType').value, targetW = parseInt(document.getElementById('copyTargetWeek').value);
+            const tDay = parseInt(document.getElementById('copyTargetDay').value), targetDays = type === 'day' ? [tDay] : [0, 1, 2, 3, 4];
+            const operation = {
+                targetWeek: targetW, targetDays: targetDays,
+                execute: () => {
+                    if (type === 'day') {
+                        const sDay = parseInt(document.getElementById('copySourceDay').value);
+                        tasks.filter(t => t.weekOffset === currentWeekOffset && t.day === sDay).forEach(t => { tasks.push({...t, id: Date.now() + Math.random(), weekOffset: targetW, day: tDay}); unpublishedCount++; });
+                    } else {
+                        tasks.filter(t => t.weekOffset === currentWeekOffset).forEach(t => { tasks.push({...t, id: Date.now() + Math.random(), weekOffset: targetW}); unpublishedCount++; });
+                    }
+                    closeModal('copyModal'); renderCalendar(); showFeedback('Plan copied successfully!');
+                }
+            };
+            if (checkConflict(targetW, targetDays)) { pendingOperation = operation; openModal('conflictModal'); } else operation.execute();
+        }
+
+        function handleExecuteAI() {
+            const scope = document.querySelector('input[name="aiScope"]:checked').value;
+            const targetWeek = parseInt(document.getElementById('aiWeekSelect').value), targetDay = parseInt(document.getElementById('aiDaySelect').value);
+            const targetDays = scope === 'day' ? [targetDay] : [0, 1, 2, 3, 4], week = scope === 'week' ? targetWeek : currentWeekOffset;
+            const operation = {
+                targetWeek: week, targetDays: targetDays,
+                execute: () => {
+                    document.getElementById('gridContainer').style.opacity = '0.5';
+                    setTimeout(() => {
+                        const add = (w, d, s, e, t, c) => { tasks.push({ id: Date.now() + Math.random(), weekOffset: w, day: d, start: s, end: e, title: t, color: c, offered: false }); unpublishedCount++; };
+                        targetDays.forEach(dIdx => {
+                            let h = START_HOUR;
+                            while (h < END_HOUR) {
+                                if (isTimeAvailable(dIdx, h)) {
+                                    let actual = 0, check = h;
+                                    while (actual < 2.5 && check < END_HOUR && isTimeAvailable(dIdx, check)) { actual += 0.5; check += 0.5; }
+                                    if (actual >= 1) { 
+                                        const p = ["Till Shift", "Floor Support", "Stock Management"], t = p[Math.floor(Math.random() * p.length)];
+                                        add(week, dIdx, formatHour(h), formatHour(h + actual), t, t === 'Till Shift' ? 'green' : (t === 'Floor Support' ? 'blue' : 'purple')); 
+                                        h += actual; 
+                                    } else h += 0.5;
+                                } else h += 0.5;
+                            }
+                            add(week, dIdx, "12:30", "13:00", "Break", "gray");
+                        });
+                        document.getElementById('gridContainer').style.opacity = '1'; renderCalendar(); showFeedback('AI Plan generated successfully!');
+                    }, 600);
+                    closeModal('aiModal');
+                }
+            };
+            if (checkConflict(week, targetDays)) { pendingOperation = operation; openModal('conflictModal'); } else operation.execute();
+        }
+
+        function handleOfferSwap() {
+            if (currentActiveTaskId) {
+                const idx = tasks.findIndex(t => t.id === currentActiveTaskId);
+                tasks[idx].offered = !tasks[idx].offered;
+                unpublishedCount++; closeModal('taskModal'); renderCalendar(); 
+                showFeedback(tasks[idx].offered ? 'Slot offered for swap!' : 'Swap offer retracted!');
+            }
+        }
+
+        function initiateSwapReview(offer) {
+            document.getElementById('swapRequesterAvatar').src = offer.avatar;
+            document.getElementById('swapRequesterName').innerText = offer.user;
+            document.getElementById('swapShiftName').innerText = offer.title;
+            document.getElementById('confirmSwapBtn').onclick = () => {
+                tasks.push({
+                    id: Date.now(), weekOffset: currentWeekOffset, day: offer.day, start: offer.start, end: offer.end, title: offer.title,
+                    color: offer.title === 'Till Shift' ? 'green' : (offer.title === 'Floor Support' ? 'blue' : 'purple'), offered: false
+                });
+                swapOffers = swapOffers.filter(s => s.id !== offer.id); unpublishedCount++; closeModal('swapConfirmModal'); renderCalendar(); showFeedback('Swap offer accepted!');
+            };
+            openModal('swapConfirmModal');
+        }
+
+        function renderCalendar() {
+            const container = document.getElementById('dayColumnsContainer'); if (!container) return; container.innerHTML = '';
+            document.getElementById('weekLabel').innerText = `Week ${20 + currentWeekOffset}, 2026`;
+            const header = document.getElementById('headerGrid');
+            header.innerHTML = '<div class="h-12 border-r border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Time</div>';
+            ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'].forEach((label, idx) => {
+                const date = new Date(initialMonday); date.setDate(date.getDate() + (currentWeekOffset * 7) + idx);
+                const isToday = currentWeekOffset === 0 && idx === 3;
+                const div = document.createElement('div');
+                div.className = `h-12 border-gray-200 flex flex-col items-center justify-center ${isToday ? 'bg-blue-50/50 relative border-r-2 border-blue-500' : 'border-r'}`;
+                div.innerHTML = `${isToday ? '<div class="absolute -top-1 w-6 h-1 bg-blue-500 rounded-full"></div>' : ''}<span class="text-[10px] font-bold ${idx >= 5 ? 'text-red-300' : (isToday ? 'text-blue-600' : 'text-gray-400')} uppercase">${label}</span><span class="text-xs font-bold ${isToday ? 'text-blue-700' : (idx >= 5 ? 'text-red-400' : '')}">${date.getDate()}.${date.getMonth() + 1}</span>`;
+                header.appendChild(div);
+            });
+            const gridHeight = ((END_HOUR - START_HOUR) * 2) * SLOT_HEIGHT;
+            for (let d = 0; d < 7; d++) {
+                const col = document.createElement('div'); col.className = 'relative bg-white border-r border-gray-100 day-column';
+                col.style.height = gridHeight + 'px'; col.setAttribute('data-day', d);
+                container.appendChild(col); // IMPORTANT: Append col before filling it
+                
+                const dayTasks = tasks.filter(t => t.day === d && t.weekOffset === currentWeekOffset);
+                const isDayEmpty = dayTasks.length === 0;
+
+                for(let i=0; i < (END_HOUR - START_HOUR) * 2; i++) {
+                    const currentHour = START_HOUR + (i * 0.5), timeMins = currentHour * 60;
+                    if (!isTimeAvailable(d, currentHour)) {
+                        const hatch = document.createElement('div'); hatch.className = 'availability-hatch'; hatch.style.top = (i * SLOT_HEIGHT) + 'px'; hatch.style.height = SLOT_HEIGHT + 'px'; col.appendChild(hatch);
+                    } else {
+                        const slot = document.createElement('div'); slot.className = 'available-slot'; slot.style.top = (i * SLOT_HEIGHT) + 'px'; slot.style.height = SLOT_HEIGHT + 'px'; slot.setAttribute('data-slot-idx', i);
+                        const demandVal = demandsData[selectedDemandTask][i % demandsData[selectedDemandTask].length];
+                        if (demandVal < 0) {
+                            slot.onmousedown = (e) => startDragNew(e, d, i); slot.onmouseenter = () => updateDragNew(i); slot.style.cursor = 'cell';
+                        } else { slot.style.cursor = 'not-allowed'; slot.title = 'Tasks can not be added to slots without demands'; }
+                        const isEmpty = !dayTasks.some(t => timeMins >= parseTimeToMinutes(t.start) && timeMins < parseTimeToMinutes(t.end));
+                        if (isEmpty && demandVal < 0) { const num = document.createElement('span'); num.className = 'demand-indicator'; num.innerText = demandVal; slot.appendChild(num); }
+                        col.appendChild(slot);
+                    }
+                }
+
+                if (isDayEmpty) {
+                    swapOffers.filter(s => s.day === d).forEach(offer => {
+                        const offerEl = document.createElement('div'); offerEl.className = 'swap-offer-block';
+                        const startMins = parseTimeToMinutes(offer.start), endMins = parseTimeToMinutes(offer.end);
+                        offerEl.style.top = ((startMins - (START_HOUR * 60)) / 30) * SLOT_HEIGHT + 'px'; 
+                        offerEl.style.height = ((endMins - startMins) / 30) * SLOT_HEIGHT + 'px';
+                        offerEl.innerHTML = `<div class="font-bold">SWAP: ${offer.user}</div><div class="text-[8px] opacity-70">${offer.title}</div><div class="accept-label">Tap to review</div>`;
+                        offerEl.onclick = (e) => { e.stopPropagation(); initiateSwapReview(offer); };
+                        col.appendChild(offerEl);
+                    });
+                }
+
+                dayTasks.forEach(task => {
+                    const el = document.createElement('div'); el.className = 'task-block'; 
+                    const startMins = parseTimeToMinutes(task.start), endMins = parseTimeToMinutes(task.end);
+                    el.style.top = ((startMins - (START_HOUR * 60)) / 30) * SLOT_HEIGHT + 'px'; 
+                    el.style.height = ((endMins - startMins) / 30) * SLOT_HEIGHT + 'px';
+                    
+                    if (task.offered) {
+                        el.classList.add('is-offered');
+                        el.innerHTML = `<div class="flex justify-between w-full"><span>${task.title}</span><span>🔄</span></div>`;
+                    } else {
+                        el.innerHTML = task.title;
+                    }
+
+                    el.onmousedown = (e) => { if (e.button === 0) { e.stopPropagation(); startMovingTask(e, task); } };
+                    el.onclick = (e) => { 
+                        if (!isMovingTaskActive) { e.stopPropagation(); openEditModal(task); }
+                    };
+                    
+                    if (task.color === 'red') { el.style.background = '#fff1f0'; el.style.borderColor = '#ff4d4f'; el.style.color = '#a8071a'; }
+                    else if (task.color === 'green') { el.style.background = '#f6ffed'; el.style.borderColor = '#52c41a'; el.style.color = '#135200'; }
+                    else if (task.color === 'purple') { el.style.background = '#f9f0ff'; el.style.borderColor = '#722ed1'; el.style.color = '#22075e'; }
+                    else if (task.color === 'gray') { el.style.background = '#f5f5f5'; el.style.borderColor = '#d9d9d9'; el.style.color = '#595959'; el.style.borderLeftStyle = 'dashed'; }
+                    col.appendChild(el);
+                });
+            }
+            updateStats();
+        }
+
+        function startDragNew(e, day, slotIdx) { if (e.button !== 0) return; isDraggingNew = true; dragDay = day; dragStartSlot = slotIdx; dragEndSlot = slotIdx; createDragPreview(); }
+        function updateDragNew(slotIdx) { if (!isDraggingNew) return; dragEndSlot = slotIdx; updateDragPreview(); }
+        function createDragPreview() {
+            const preview = document.createElement('div'); preview.id = 'dragPreview'; preview.className = 'drag-preview';
+            const dayCols = document.querySelectorAll('.day-column');
+            if (dayCols[dragDay]) dayCols[dragDay].appendChild(preview); updateDragPreview();
+        }
+        function updateDragPreview() {
+            const preview = document.getElementById('dragPreview'); if (!preview) return;
+            const min = Math.min(dragStartSlot, dragEndSlot), max = Math.max(dragStartSlot, dragEndSlot);
+            preview.style.top = (min * SLOT_HEIGHT) + 'px'; preview.style.height = ((max - min + 1) * SLOT_HEIGHT) + 'px';
+            preview.innerText = selectedDemandTask;
+        }
+        function finalizeDragNew() {
+            if (!isDraggingNew) return;
+            const min = Math.min(dragStartSlot, dragEndSlot), max = Math.max(dragStartSlot, dragEndSlot);
+            const color = selectedDemandTask === 'Till Shift' ? 'green' : (selectedDemandTask === 'Floor Support' ? 'blue' : (selectedDemandTask === 'Stock Management' ? 'purple' : 'blue'));
+            tasks.push({ id: Date.now() + Math.random(), weekOffset: currentWeekOffset, day: dragDay, start: formatHour(START_HOUR + (min * 0.5)), end: formatHour(START_HOUR + ((max + 1) * 0.5)), title: selectedDemandTask, color: color, offered: false });
+            unpublishedCount++; isDraggingNew = false; document.getElementById('dragPreview')?.remove(); renderCalendar();
+        }
+
+        function startMovingTask(e, task) {
+            movingTaskData = task; dragActiveBlock = e.currentTarget;
+            movingInitialY = e.clientY; movingInitialTop = parseInt(dragActiveBlock.style.top);
+            isMovingTask = true; isMovingTaskActive = false; 
+        }
+        function updateMovingTask(e) {
+            if (!isMovingTask || !dragActiveBlock) return;
+            const deltaY = e.clientY - movingInitialY;
+            if (!isMovingTaskActive && Math.abs(deltaY) > 5) {
+                isMovingTaskActive = true;
+                dragActiveBlock.classList.add('is-moving');
+            }
+            if (isMovingTaskActive) {
+                const newTop = movingInitialTop + deltaY, snapTop = Math.round(newTop / SLOT_HEIGHT) * SLOT_HEIGHT;
+                const target = document.elementFromPoint(e.clientX, e.clientY), dayCol = target?.closest('.day-column');
+                if (dayCol) {
+                    const newDayIdx = parseInt(dayCol.getAttribute('data-day'));
+                    if (newDayIdx !== movingTaskData.day) { movingTaskData.day = newDayIdx; dayCol.appendChild(dragActiveBlock); }
+                }
+                dragActiveBlock.style.top = snapTop + 'px';
+            }
+        }
+        function finalizeMovingTask() {
+            if (!isMovingTask) return;
+            if (isMovingTaskActive && dragActiveBlock) {
+                const finalTop = parseInt(dragActiveBlock.style.top), slotIdx = finalTop / SLOT_HEIGHT;
+                const dur = parseTimeToMinutes(movingTaskData.end) - parseTimeToMinutes(movingTaskData.start);
+                movingTaskData.start = formatHour(START_HOUR + (slotIdx * 0.5));
+                movingTaskData.end = formatHour(START_HOUR + (slotIdx * 0.5) + (dur / 60));
+                unpublishedCount++;
+                renderCalendar(); 
+            }
+            isMovingTask = false;
+            setTimeout(() => { isMovingTaskActive = false; }, 50);
+            if (dragActiveBlock) dragActiveBlock.classList.remove('is-moving');
+            dragActiveBlock = null;
+        }
+
+        document.onmouseup = () => { if (isDraggingNew) finalizeDragNew(); if (isMovingTask) finalizeMovingTask(); };
+        document.onmousemove = (e) => { if (isMovingTask) updateMovingTask(e); };
+
+        function updateStats() {
+            let totalMins = 0; tasks.filter(t => t.weekOffset === currentWeekOffset).forEach(t => totalMins += (parseTimeToMinutes(t.end) - parseTimeToMinutes(t.start)));
+            const totalHours = totalMins / 60, workedPerc = (totalHours / targetAllocationBase) * 100;
+            const totalHoursLabel = document.getElementById('totalHoursLabel'); if (totalHoursLabel) totalHoursLabel.innerText = totalHours.toFixed(1);
+            const targetLabel = document.getElementById('targetLabel'); if (targetLabel) targetLabel.innerText = targetAllocationBase;
+            const tBar = document.getElementById('targetBar'), oBar = document.getElementById('overtimeBar');
+            if (tBar) tBar.style.width = Math.min(100, workedPerc) + '%';
+            if (oBar) oBar.style.width = Math.max(0, workedPerc - 100) + '%';
+            const circle = document.getElementById('unpublishedCircle');
+            if (circle) circle.style.setProperty('--progress', `${Math.min(100, workedPerc) * 3.6}deg`);
+            const upPerc = document.getElementById('unpublishedPercent'); if (upPerc) upPerc.innerText = totalHours.toFixed(1) + 'h';
+            const upLabel = document.getElementById('unpublishedLabel'); if (upLabel) upLabel.innerText = `${unpublishedCount} slots added`;
+            const submitBtn = document.getElementById('mainSubmitBtn'); if (submitBtn) submitBtn.disabled = (unpublishedCount === 0);
+        }
+
+        function setAllocation(m) { targetAllocationBase = Math.round(40 * m); updateStats(); closeModal('prefsModal'); }
+        function submitChanges() { unpublishedCount = 0; renderCalendar(); showFeedback('Changes submitted successfully!'); }
+        function changeWeek(d) { const n = currentWeekOffset + d; if (n >= 0 && n <= 3) { currentWeekOffset = n; renderCalendar(); } }
+
+        function openModal(id, start, end, day) { 
+            currentActiveTaskId = null; 
+            if (id === 'taskModal') { currentActiveDay = day; populateTimeSelects(day, start, end); document.getElementById('removeTaskBtn').classList.add('hidden'); }
+            if (id === 'aiModal') updateAIScopeDisplay();
+            if (id === 'copyModal') updateCopyUI();
+            document.getElementById(id).classList.add('modal-active'); 
+        }
+        function openEditModal(task) {
+            currentActiveTaskId = task.id; currentActiveDay = task.day;
+            const title = document.getElementById('taskModalTitle'); if (title) title.innerText = "Edit Slot";
+            const btn = document.getElementById('removeTaskBtn'); if (btn) btn.classList.remove('hidden');
+            const swapBtn = document.getElementById('offerSwapBtn');
+            if (swapBtn) swapBtn.innerText = task.offered ? "RETRACT SWAP OFFER" : "OFFER FOR SWAP";
+            populateTimeSelects(task.day, task.start, task.end);
+            const select = document.getElementById('taskSelect'); if (select) select.value = task.title;
+            document.getElementById('taskModal').classList.add('modal-active');
+        }
+        function closeModal(id) { const el = document.getElementById(id); if (el) el.classList.remove('modal-active'); }
+        function populateTimeSelects(dayIdx, selectedStart, selectedEnd) {
+            const startS = document.getElementById('startTime'), endS = document.getElementById('endTime');
+            if (!startS || !endS) return; startS.innerHTML = ''; endS.innerHTML = '';
+            for (let h = START_HOUR; h <= END_HOUR; h += 0.5) {
+                if (isTimeAvailable(dayIdx, h)) {
+                    const t = formatHour(h);
+                    if (h < END_HOUR) { const o = document.createElement('option'); o.value = t; o.innerText = t; if(t===selectedStart) o.selected=true; startS.appendChild(o); }
+                    if (h > START_HOUR) { const o = document.createElement('option'); o.value = t; o.innerText = t; if(t===selectedEnd) o.selected=true; endS.appendChild(o); }
+                }
+            }
+        }
+        function handleSaveTask() {
+            const sEl = document.getElementById('startTime'), eEl = document.getElementById('endTime'), tEl = document.getElementById('taskSelect');
+            if (!sEl || !eEl || !tEl) return;
+            const s = sEl.value, e = eEl.value, t = tEl.value;
+            const color = t === 'Till Shift' ? 'green' : (t === 'Floor Support' ? 'blue' : (t === 'Stock Management' ? 'purple' : (t === 'Break' ? 'gray' : 'purple')));
+            if (s && e && currentActiveDay !== null) {
+                if (parseTimeToMinutes(e) <= parseTimeToMinutes(s)) return;
+                if (currentActiveTaskId) {
+                    const idx = tasks.findIndex(task => task.id === currentActiveTaskId);
+                    tasks[idx] = { ...tasks[idx], start: s, end: e, title: t, color: color };
+                } else {
+                    tasks.push({ id: Date.now() + Math.random(), weekOffset: currentWeekOffset, day: currentActiveDay, start: s, end: e, title: t, color: color, offered: false });
+                }
+                unpublishedCount++; renderCalendar(); closeModal('taskModal');
+            }
+        }
+        function handleRemoveTask() { if (currentActiveTaskId) { tasks = tasks.filter(task => task.id !== currentActiveTaskId); unpublishedCount++; renderCalendar(); closeModal('taskModal'); } }
+
+        function updateAIScopeDisplay() {
+            const scopeEl = document.querySelector('input[name="aiScope"]:checked'); if (!scopeEl) return;
+            const scope = scopeEl.value, dayText = document.getElementById('aiDaySelect').options[document.getElementById('aiDaySelect').selectedIndex].text;
+            const weekText = document.getElementById('aiWeekSelect').options[document.getElementById('aiWeekSelect').selectedIndex].text;
+            document.getElementById('dayScopeBlock').classList.toggle('active', scope === 'day');
+            document.getElementById('weekScopeBlock').classList.toggle('active', scope === 'week');
+            document.getElementById('periodScopeBlock').classList.toggle('active', scope === 'period');
+            let s = scope === 'day' ? dayText : (scope === 'week' ? weekText : "Selected Period");
+            document.getElementById('aiSummaryText').innerHTML = `Filling gaps and inserting breaks for <span class="font-bold text-[#722ed1]">${s}</span>.`;
+        }
+
+        function renderMiniCalendar() {
+            const miniCal = document.getElementById('miniCalendarGrid'); if (!miniCal) return; miniCal.innerHTML = '';
+            const dayHeaders = ['M','T','W','T','F','S','S'];
+            dayHeaders.forEach(h => { const head = document.createElement('div'); head.className = 'text-[9px] font-bold text-gray-400 text-center mb-1'; head.innerText = h; miniCal.appendChild(head); });
+            for(let p=0; p<2; p++) { const empty = document.createElement('div'); empty.className = 'aspect-square'; miniCal.appendChild(empty); }
+            for(let i=1; i<=30; i++) {
+                const day = document.createElement('div'); const isSelected = i === 15;
+                day.className = `aspect-square rounded-sm flex items-center justify-center text-[10px] ${isSelected ? 'bg-blue-600 text-white font-bold shadow-md' : 'hover:bg-gray-100 text-gray-400 font-medium'} transition cursor-pointer select-none`;
+                day.innerText = i; miniCal.appendChild(day);
+            }
+        }
+        window.onclick = e => { if (e.target.classList.contains('modal-overlay')) closeModal(e.target.id); }
+        window.onload = () => { renderCalendar(); renderMiniCalendar(); };
+    </script>
+</body>
+</html>
