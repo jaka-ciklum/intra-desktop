@@ -109,7 +109,7 @@
             justify-content: flex-start;
             z-index: 20;
             line-height: 1.2;
-            transition: box-shadow 0.2s;
+            transition: all 0.2s;
             cursor: pointer;
         }
         .task-block:hover {
@@ -234,27 +234,29 @@
         }
         .circular-progress {
             position: relative;
-            width: 44px;
-            height: 44px;
+            width: 52px;
+            height: 52px;
             border-radius: 50%;
             background: conic-gradient(#1890ff var(--progress), #f0f0f0 0deg);
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-shrink: 0;
         }
         .circular-progress::before {
             content: "";
             position: absolute;
-            width: 36px;
-            height: 36px;
+            width: 42px;
+            height: 42px;
             background: white;
             border-radius: 50%;
         }
         .circular-progress span {
             position: relative;
-            font-size: 11px;
-            font-weight: 700;
-            color: #595959;
+            font-size: 9px;
+            font-weight: 800;
+            color: #262626;
+            white-space: nowrap;
         }
         .submit-btn {
             background: #722ed1;
@@ -456,11 +458,11 @@
                             <h3 class="text-xs font-bold mb-4 text-gray-500 uppercase tracking-widest">Rules</h3>
                             <div class="space-y-3">
                                 <div class="flex items-center gap-3">
-                                    <input type="checkbox" checked disabled class="w-3.5 h-3.5 rounded text-blue-500 accent-blue-600 cursor-default opacity-80">
+                                    <span id="complianceIcon" class="text-green-500 font-bold text-sm">✓</span>
                                     <span class="text-xs text-gray-600 font-medium tracking-tight">Compliance</span>
                                 </div>
                                 <div class="flex items-center gap-3">
-                                    <input type="checkbox" id="syncCheck" disabled class="w-3.5 h-3.5 rounded text-gray-300 accent-green-600 cursor-default opacity-80">
+                                    <span id="syncIcon" class="text-gray-300 font-bold text-sm select-none">○</span>
                                     <span id="syncText" class="text-xs text-gray-600 font-medium tracking-tight">Staff Sync</span>
                                 </div>
                             </div>
@@ -475,7 +477,7 @@
         </section>
     </div>
 
-    <!-- MODALS OUTSIDE FOR TOP-LEVEL VIEWING -->
+    <!-- MODALS -->
     <div id="feedbackMsg" class="fixed top-6 left-1/2 -translate-x-1/2 z-[2000] bg-[#722ed1] text-white px-8 py-3.5 rounded-full shadow-2xl font-bold text-sm transform -translate-y-20 transition-all duration-500 ease-out pointer-events-none flex items-center gap-3">
         <span class="text-xl">✓</span>
         <span id="feedbackText">Plan copied successfully!</span>
@@ -489,8 +491,8 @@
                 The target range already contains slots you created. How should the new plan be applied?
             </p>
             <div class="space-y-3">
-                <button onclick="resolveConflict('overwrite')" class="w-full py-3.5 bg-red-500 text-white font-bold rounded-2xl shadow-lg hover:bg-red-600 transition">Overwrite All Existing</button>
-                <button onclick="resolveConflict('keep')" class="w-full py-3.5 bg-gray-100 text-gray-700 font-bold rounded-2xl hover:bg-gray-200 transition">Keep & Merge</button>
+                <button onclick="resolveConflict('keep')" class="w-full py-4 bg-[#722ed1] text-white font-bold rounded-2xl shadow-xl shadow-purple-100 hover:bg-[#531dab] transition transform hover:-translate-y-0.5">Keep & Merge</button>
+                <button onclick="resolveConflict('overwrite')" class="w-full py-4 bg-orange-700 text-white font-bold rounded-2xl shadow-lg hover:bg-orange-800 transition">Overwrite All Existing</button>
             </div>
         </div>
     </div>
@@ -658,6 +660,9 @@
         </div>
     </div>
 
+    <!-- PREFERENCES MODAL -->
+    <div id="prefsModal" class="modal-overlay">...</div>
+
     <script>
         const START_HOUR = 8, END_HOUR = 20, SLOT_HEIGHT = 20;
         let currentWeekOffset = 0, currentActiveDay = null, currentActiveTaskId = null, unpublishedCount = 0, targetAllocationBase = 40;
@@ -804,7 +809,7 @@
             if (currentActiveTaskId) {
                 const idx = tasks.findIndex(t => t.id === currentActiveTaskId);
                 tasks[idx].offered = !tasks[idx].offered;
-                unpublishedCount++; closeModal('taskModal'); renderCalendar(); 
+                closeModal('taskModal'); renderCalendar(); 
                 showFeedback(tasks[idx].offered ? 'Slot offered for swap!' : 'Swap offer retracted!');
             }
         }
@@ -840,11 +845,9 @@
             for (let d = 0; d < 7; d++) {
                 const col = document.createElement('div'); col.className = 'relative bg-white border-r border-gray-100 day-column';
                 col.style.height = gridHeight + 'px'; col.setAttribute('data-day', d);
-                container.appendChild(col); // IMPORTANT: Append col before filling it
-                
+                container.appendChild(col); 
                 const dayTasks = tasks.filter(t => t.day === d && t.weekOffset === currentWeekOffset);
                 const isDayEmpty = dayTasks.length === 0;
-
                 for(let i=0; i < (END_HOUR - START_HOUR) * 2; i++) {
                     const currentHour = START_HOUR + (i * 0.5), timeMins = currentHour * 60;
                     if (!isTimeAvailable(d, currentHour)) {
@@ -860,7 +863,6 @@
                         col.appendChild(slot);
                     }
                 }
-
                 if (isDayEmpty) {
                     swapOffers.filter(s => s.day === d).forEach(offer => {
                         const offerEl = document.createElement('div'); offerEl.className = 'swap-offer-block';
@@ -872,25 +874,19 @@
                         col.appendChild(offerEl);
                     });
                 }
-
                 dayTasks.forEach(task => {
                     const el = document.createElement('div'); el.className = 'task-block'; 
                     const startMins = parseTimeToMinutes(task.start), endMins = parseTimeToMinutes(task.end);
                     el.style.top = ((startMins - (START_HOUR * 60)) / 30) * SLOT_HEIGHT + 'px'; 
                     el.style.height = ((endMins - startMins) / 30) * SLOT_HEIGHT + 'px';
-                    
                     if (task.offered) {
                         el.classList.add('is-offered');
-                        el.innerHTML = `<div class="flex justify-between w-full"><span>${task.title}</span><span>🔄</span></div>`;
+                        el.innerHTML = `<div class="flex justify-between w-full items-center"><span>${task.title}</span><span class="text-sm">🔄</span></div>`;
                     } else {
                         el.innerHTML = task.title;
                     }
-
                     el.onmousedown = (e) => { if (e.button === 0) { e.stopPropagation(); startMovingTask(e, task); } };
-                    el.onclick = (e) => { 
-                        if (!isMovingTaskActive) { e.stopPropagation(); openEditModal(task); }
-                    };
-                    
+                    el.onclick = (e) => { if (!isMovingTaskActive) { e.stopPropagation(); openEditModal(task); } };
                     if (task.color === 'red') { el.style.background = '#fff1f0'; el.style.borderColor = '#ff4d4f'; el.style.color = '#a8071a'; }
                     else if (task.color === 'green') { el.style.background = '#f6ffed'; el.style.borderColor = '#52c41a'; el.style.color = '#135200'; }
                     else if (task.color === 'purple') { el.style.background = '#f9f0ff'; el.style.borderColor = '#722ed1'; el.style.color = '#22075e'; }
@@ -951,7 +947,6 @@
                 const dur = parseTimeToMinutes(movingTaskData.end) - parseTimeToMinutes(movingTaskData.start);
                 movingTaskData.start = formatHour(START_HOUR + (slotIdx * 0.5));
                 movingTaskData.end = formatHour(START_HOUR + (slotIdx * 0.5) + (dur / 60));
-                unpublishedCount++;
                 renderCalendar(); 
             }
             isMovingTask = false;
@@ -964,18 +959,29 @@
         document.onmousemove = (e) => { if (isMovingTask) updateMovingTask(e); };
 
         function updateStats() {
-            let totalMins = 0; tasks.filter(t => t.weekOffset === currentWeekOffset).forEach(t => totalMins += (parseTimeToMinutes(t.end) - parseTimeToMinutes(t.start)));
+            let totalMins = 0, syncFound = false;
+            tasks.filter(t => t.weekOffset === currentWeekOffset).forEach(t => {
+                totalMins += (parseTimeToMinutes(t.end) - parseTimeToMinutes(t.start));
+                if (t.title === "Staff Sync") syncFound = true;
+            });
             const totalHours = totalMins / 60, workedPerc = (totalHours / targetAllocationBase) * 100;
             const totalHoursLabel = document.getElementById('totalHoursLabel'); if (totalHoursLabel) totalHoursLabel.innerText = totalHours.toFixed(1);
             const targetLabel = document.getElementById('targetLabel'); if (targetLabel) targetLabel.innerText = targetAllocationBase;
             const tBar = document.getElementById('targetBar'), oBar = document.getElementById('overtimeBar');
             if (tBar) tBar.style.width = Math.min(100, workedPerc) + '%';
             if (oBar) oBar.style.width = Math.max(0, workedPerc - 100) + '%';
+            
             const circle = document.getElementById('unpublishedCircle');
             if (circle) circle.style.setProperty('--progress', `${Math.min(100, workedPerc) * 3.6}deg`);
             const upPerc = document.getElementById('unpublishedPercent'); if (upPerc) upPerc.innerText = totalHours.toFixed(1) + 'h';
             const upLabel = document.getElementById('unpublishedLabel'); if (upLabel) upLabel.innerText = `${unpublishedCount} slots added`;
             const submitBtn = document.getElementById('mainSubmitBtn'); if (submitBtn) submitBtn.disabled = (unpublishedCount === 0);
+            
+            const syncIcon = document.getElementById('syncIcon');
+            if (syncIcon) {
+                if (syncFound) { syncIcon.innerText = '✓'; syncIcon.className = 'text-green-500 font-bold text-sm select-none'; }
+                else { syncIcon.innerText = '○'; syncIcon.className = 'text-gray-300 font-bold text-sm select-none'; }
+            }
         }
 
         function setAllocation(m) { targetAllocationBase = Math.round(40 * m); updateStats(); closeModal('prefsModal'); }
@@ -987,7 +993,7 @@
             if (id === 'taskModal') { currentActiveDay = day; populateTimeSelects(day, start, end); document.getElementById('removeTaskBtn').classList.add('hidden'); }
             if (id === 'aiModal') updateAIScopeDisplay();
             if (id === 'copyModal') updateCopyUI();
-            document.getElementById(id).classList.add('modal-active'); 
+            const el = document.getElementById(id); if (el) el.classList.add('modal-active'); 
         }
         function openEditModal(task) {
             currentActiveTaskId = task.id; currentActiveDay = task.day;
@@ -1023,11 +1029,18 @@
                     tasks[idx] = { ...tasks[idx], start: s, end: e, title: t, color: color };
                 } else {
                     tasks.push({ id: Date.now() + Math.random(), weekOffset: currentWeekOffset, day: currentActiveDay, start: s, end: e, title: t, color: color, offered: false });
+                    unpublishedCount++;
                 }
-                unpublishedCount++; renderCalendar(); closeModal('taskModal');
+                renderCalendar(); closeModal('taskModal');
             }
         }
-        function handleRemoveTask() { if (currentActiveTaskId) { tasks = tasks.filter(task => task.id !== currentActiveTaskId); unpublishedCount++; renderCalendar(); closeModal('taskModal'); } }
+        function handleRemoveTask() { 
+            if (currentActiveTaskId) { 
+                tasks = tasks.filter(task => task.id !== currentActiveTaskId); 
+                if (unpublishedCount > 0) unpublishedCount--;
+                renderCalendar(); closeModal('taskModal'); 
+            } 
+        }
 
         function updateAIScopeDisplay() {
             const scopeEl = document.querySelector('input[name="aiScope"]:checked'); if (!scopeEl) return;
@@ -1037,7 +1050,8 @@
             document.getElementById('weekScopeBlock').classList.toggle('active', scope === 'week');
             document.getElementById('periodScopeBlock').classList.toggle('active', scope === 'period');
             let s = scope === 'day' ? dayText : (scope === 'week' ? weekText : "Selected Period");
-            document.getElementById('aiSummaryText').innerHTML = `Filling gaps and inserting breaks for <span class="font-bold text-[#722ed1]">${s}</span>.`;
+            const sumText = document.getElementById('aiSummaryText');
+            if (sumText) sumText.innerHTML = `Filling gaps and inserting breaks for <span class="font-bold text-[#722ed1]">${s}</span>.`;
         }
 
         function renderMiniCalendar() {
